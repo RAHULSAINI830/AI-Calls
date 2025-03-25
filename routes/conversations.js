@@ -1,36 +1,63 @@
+// routes/conversations.js
 const express = require('express');
 const router = express.Router();
-const Conversation = require('../models/conversation'); // Ensure this file exists
+const Conversation = require('../models/conversation');
 const User = require('../models/user');
-const jwt = require('jsonwebtoken');
+const nodemailer = require('nodemailer');
+const { authenticateToken } = require('./auth'); // if you require authentication
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+// Configure your email transporter (ensure to use environment variables in production)
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER || 'rahul.saini@zentrades.pro',
+    pass: process.env.EMAIL_PASS || 'Rahul@902'
+  },
+});
 
-// Middleware to authenticate token
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.status(401).json({ message: 'Access token missing' });
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).json({ message: 'Invalid token' });
-    req.user = user;
-    next();
-  });
-};
-
-// GET /api/conversations - retrieve conversations specific to the admin's model_id
-router.get('/', authenticateToken, async (req, res) => {
+/**
+ * POST /api/conversations
+ * Creates a new conversation (call) and sends an email notification
+ */
+router.post('/', authenticateToken, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select('admin model_id');
-    if (!user || !user.admin) {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-    // Retrieve conversations specific to the admin's model_id
-    const conversations = await Conversation.find({ model_id: user.model_id });
-    res.json(conversations);
+    // Create and save the new conversation
+    const newConversation = new Conversation(req.body);
+    await newConversation.save();
+
+    // Find admin and subordinate users associated with the model_id
+    const adminUsers = await User.find({ model_id: newConversation.model_id, admin: true });
+    const subordinateUsers = await User.find({ model_id: newConversation.model_id, admin: false });
+    const allUsers = [...adminUsers, ...subordinateUsers];
+
+    // Prepare a list of email addresses
+    const recipients = allUsers.map(user => user.email).join(',');
+
+    // Refined email content
+    const mailOptions = {
+      from: process.env.EMAIL_USER || 'rahul.saini@zentrades.pro',
+      to: recipients,
+      subject: 'New Service Inquiry Alert',
+      text:
+        `Dear User,\n\n` +
+        `A new service inquiry has just been received. Please log in to your dashboard to review the details and take the necessary action.\n\n` +
+        `Thank you,\n` +
+        `Your Service Team`
+    };
+
+    // Send the email
+    transporter.sendMail(mailOptions, (err, info) => {
+      if (err) {
+        console.error('Error sending email notifications:', err);
+      } else {
+        console.log('Email notifications sent:', info.response);
+      }
+    });
+
+    res.status(201).json({ message: 'Conversation added and notifications sent.' });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error fetching conversations' });
+    console.error('Error adding conversation:', error);
+    res.status(500).json({ message: 'Error adding conversation.' });
   }
 });
 
