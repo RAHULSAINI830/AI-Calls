@@ -2,7 +2,9 @@
 .calendar-page-container {
   display: flex;
   min-height: 100vh;
-  background-color: #f0f2f5;
+  background-color: #1c304f;;
+  gap: 10px;
+  padding-top: 5px;
 }
 
 /* Main content area with Calendar and Tasks sections */
@@ -10,6 +12,8 @@
   flex: 1;
   display: flex;
   flex-direction: row;
+  height: 98vh;
+  gap: 10px;
 }
 
 /* Calendar Section styling */
@@ -20,6 +24,7 @@
   box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
+  border-radius: 20px;
 }
 
 /* Calendar Header styling */
@@ -99,6 +104,7 @@
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  border-radius: 20px;
 }
 
 .google-signin-button {
@@ -148,4 +154,152 @@
 .google-events-list li strong {
   font-size: 1rem;
   color: #333;
+}
+/* Modal overlay */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease;
+}
+
+/* Modal container */
+.modal-container {
+  background: #fff;
+  width: 500px;
+  max-width: 95%;
+  border-radius: 8px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+  overflow: hidden;
+  animation: slideUp 0.4s ease;
+}
+
+/* Modal header with gradient */
+.modal-header {
+  background: linear-gradient(90deg, #ff7e5f, #feb47b);
+  color: #fff;
+  padding: 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+/* Modal close button */
+.modal-close-btn {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+/* Modal body */
+.modal-body {
+  padding: 20px;
+}
+
+/* Form groups */
+.form-group {
+  margin-bottom: 15px;
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group label {
+  margin-bottom: 5px;
+  font-weight: 500;
+  color: #333;
+}
+
+.form-group input,
+.form-group textarea {
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+/* Location input group */
+.location-input-group {
+  display: flex;
+  gap: 10px;
+}
+
+.pick-location-btn {
+  padding: 10px;
+  background: #feb47b;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* Modal footer */
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.btn {
+  padding: 10px 15px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.primary-btn {
+  background-color: #ff7e5f;
+  color: #fff;
+}
+
+.secondary-btn {
+  background-color: #ddd;
+  color: #333;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Location Picker Modal styles */
+.location-picker-modal .modal-container {
+  width: 800px;
+}
+
+.location-picker-modal .modal-header {
+  background: linear-gradient(90deg, #ff7e5f, #feb47b);
+}
+
+.location-picker-modal .modal-body {
+  padding: 15px;
+}
+
+.location-picker-modal input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin-top: 10px;
 }

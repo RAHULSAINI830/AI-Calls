@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+// src/components/Sidebar.js
+import React, { useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import axios from 'axios';
+import { useData } from '../DataContext'; // Import the global data hook
 import {
   GiHouse,
   GiVideoCamera,
@@ -15,39 +16,19 @@ import './Sidebar.css';
 const Sidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [profile, setProfile] = useState(null);
-
-  // Fetch user profile from backend on mount
-  useEffect(() => {
-    const fetchUserProfile = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        if (!token) return;
-        const response = await axios.get('/api/auth/profile', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (response.data) {
-          setProfile(response.data);
-          localStorage.setItem('username', response.data.username);
-        }
-      } catch (error) {
-        console.error('Error fetching user profile:', error.response ? error.response.data : error.message);
-      }
-    };
-    fetchUserProfile();
-  }, []);
-
-  // Use the username from profile, or fallback to empty string
+  
+  // Get user profile from the global DataContext
+  const { profile } = useData();
+  
   const userName = profile?.username || '';
-  // Determine tagline based on admin flag; if admin true, show "Admin", otherwise "User"
-  const tagline = profile ? (profile.admin ? "Admin" : "User") : "Your tagline here";
+  const tagline = profile ? (profile.admin ? 'Admin' : 'User') : 'Your tagline here';
 
   // Generate a letter avatar from the username
   const initialLetter = useMemo(() => {
     return userName ? userName.charAt(0).toUpperCase() : 'U';
   }, [userName]);
 
-  // Define navigation items with icons from react-icons/gi; Calendar is now enabled.
+  // Define navigation items with icons; Calendar is enabled.
   const navItems = [
     { name: 'Dashboard', icon: <GiHouse size={20} />, enabled: true },
     { name: 'Live', icon: <GiVideoCamera size={20} />, enabled: false },
@@ -58,7 +39,7 @@ const Sidebar = () => {
     { name: 'Settings', icon: <GiCog size={20} />, enabled: true },
   ];
 
-  // Derive active tab from the current route
+  // Derive the active tab from the current route.
   let activeItemFromRoute = '';
   if (location.pathname.includes('dashboard')) {
     activeItemFromRoute = 'Dashboard';
@@ -70,7 +51,7 @@ const Sidebar = () => {
     activeItemFromRoute = 'Calendar';
   }
 
-  // Navigation click handler
+  // Navigation click handler.
   const handleNavClick = (item) => {
     if (item.enabled) {
       if (item.name === 'Dashboard') {
@@ -87,7 +68,7 @@ const Sidebar = () => {
     }
   };
 
-  // Logout function
+  // Logout function.
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('username');
@@ -100,9 +81,7 @@ const Sidebar = () => {
       {/* Profile Card */}
       <div className="profile-card">
         <div className="profile-left">
-          <div className="avatar">
-            {initialLetter}
-          </div>
+          <div className="avatar">{initialLetter}</div>
         </div>
         <div className="profile-details">
           <div className="profile-title">{userName || 'User'}</div>

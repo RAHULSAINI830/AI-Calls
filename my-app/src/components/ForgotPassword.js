@@ -24,7 +24,7 @@ const ForgotPassword = ({ goBackToLogin }) => {
   const handleResetPassword = async (e) => {
     e.preventDefault();
     try {
-      const res = await axios.post('/auth/reset-password', { email, otp, newPassword });
+      const res = await axios.post('/api/auth/reset-password', { email, otp, newPassword });
       setMessage(res.data.message || 'Password reset successful.');
       setStep(3);
     } catch (error) {

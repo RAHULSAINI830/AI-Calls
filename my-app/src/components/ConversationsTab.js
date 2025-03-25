@@ -1,10 +1,11 @@
+// src/components/ConversationsTab.js
 import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
 import Sidebar from './Sidebar';
 import { GiRobotHelmet, GiHumanTarget } from 'react-icons/gi';
 import { FaCalendarAlt, FaFilter, FaTimes } from 'react-icons/fa';
 import placeholderImage from '../images/Frame 762.png';
 import './ConversationsTab.css';
+import { useData } from '../DataContext';
 
 /**
  * Helper function to format a timestamp.
@@ -24,11 +25,9 @@ const formatTimestamp = (timestamp, { timeOnly = false } = {}) => {
 };
 
 const ConversationsTab = () => {
-  const [calls, setCalls] = useState([]);
-  const [selectedCall, setSelectedCall] = useState(null);
+  // UI local state for search, filters, etc.
   const [callsSearchTerm, setCallsSearchTerm] = useState('');
   const [transcriptSearchTerm, setTranscriptSearchTerm] = useState('');
-  const [adminModelId, setAdminModelId] = useState(null);
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -36,57 +35,23 @@ const ConversationsTab = () => {
   const audioRef = useRef(null);
   const [currentTime, setCurrentTime] = useState(0);
 
-  // Fetch admin profile to get model_id.
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        if (!token) return;
-        const response = await axios.get('/api/auth/profile', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (response.data && response.data.model_id) {
-          setAdminModelId(response.data.model_id);
-        } else {
-          setAdminModelId(null);
-        }
-      } catch (error) {
-        console.error("Profile fetch error:", error);
-      }
-    };
-    fetchProfile();
-  }, []);
+  // Retrieve global profile and calls from DataContext.
+  const { profile, calls } = useData();
+  const adminModelId = profile ? profile.model_id : null;
 
-  // Fetch calls from external API using model_id.
+  // Persist selected call in sessionStorage.
+  const [selectedCall, setSelectedCall] = useState(() => {
+    const stored = sessionStorage.getItem('selectedCall');
+    return stored ? JSON.parse(stored) : null;
+  });
+
   useEffect(() => {
-    if (!adminModelId) return;
-    const fetchCalls = async () => {
-      try {
-        const options = {
-          method: 'GET',
-          url: `https://api.synthflow.ai/v2/calls?model_id=${adminModelId}`,
-          headers: {
-            accept: 'text/plain',
-            Authorization: 'Bearer 1741798049693x839210709547221000'
-          }
-        };
-        const response = await axios.request(options);
-        console.log("API Calls:", response.data);
-        if (
-          response.data.status === 'ok' &&
-          response.data.response &&
-          response.data.response.calls
-        ) {
-          setCalls(response.data.response.calls);
-        } else {
-          setCalls([]);
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    };
-    fetchCalls();
-  }, [adminModelId]);
+    if (selectedCall) {
+      sessionStorage.setItem('selectedCall', JSON.stringify(selectedCall));
+    } else {
+      sessionStorage.removeItem('selectedCall');
+    }
+  }, [selectedCall]);
 
   // Update audio currentTime state.
   useEffect(() => {
@@ -101,23 +66,31 @@ const ConversationsTab = () => {
     };
   }, [selectedCall]);
 
-  // Filter calls based on search terms and date range.
-  const filteredCalls = calls.filter(call => {
-    let match = true;
-    if (callsSearchTerm) {
-      match = match && call.phone_number_from.toLowerCase().includes(callsSearchTerm.toLowerCase());
-    }
-    if (startDate && endDate) {
-      const callDate = new Date(call.start_time);
-      const sDate = new Date(startDate);
-      const eDate = new Date(endDate);
-      match = match && callDate >= sDate && callDate <= eDate;
-    }
-    return match;
-  });
+  // Filter calls based on search term and date range.
+  const filteredCalls = calls
+    ? calls.filter(call => {
+        let match = true;
+        if (callsSearchTerm) {
+          match =
+            match &&
+            call.phone_number_from
+              .toLowerCase()
+              .includes(callsSearchTerm.toLowerCase());
+        }
+        if (startDate && endDate) {
+          const callDate = new Date(call.start_time);
+          const sDate = new Date(startDate);
+          const eDate = new Date(endDate);
+          // Include the full end day
+          eDate.setDate(eDate.getDate() + 1);
+          match = match && callDate >= sDate && callDate < eDate;
+        }
+        return match;
+      })
+    : [];
 
-  // Handle sort filter preset.
-  const handleSortFilterChange = (filter) => {
+  // Handle sort filter presets.
+  const handleSortFilterChange = filter => {
     const today = new Date();
     let sDate = '';
     let eDate = '';
@@ -137,7 +110,7 @@ const ConversationsTab = () => {
       eDate = '';
     }
     if (sDate && eDate) {
-      const formatDate = (date) => date.toISOString().split('T')[0];
+      const formatDate = date => date.toISOString().split('T')[0];
       setStartDate(formatDate(sDate));
       setEndDate(formatDate(eDate));
     } else {
@@ -155,18 +128,21 @@ const ConversationsTab = () => {
     setShowDateFilter(!showDateFilter);
   };
 
-  // Render transcript with active line highlighting and transcript search filtering.
+  // Render transcript with keyword highlighting.
   const renderTranscript = () => {
     if (!selectedCall) return null;
     const transcript = selectedCall.transcript || '';
     const lines = transcript.split('\n').filter(line => line.trim() !== '');
-    // Filter lines based on transcriptSearchTerm.
-    const filteredLines = transcriptSearchTerm 
-      ? lines.filter(line => line.toLowerCase().includes(transcriptSearchTerm.toLowerCase()))
+    const filteredLines = transcriptSearchTerm
+      ? lines.filter(line =>
+          line.toLowerCase().includes(transcriptSearchTerm.toLowerCase())
+        )
       : lines;
     let activeLineIndex = -1;
     if (audioRef.current && audioRef.current.duration && filteredLines.length > 0) {
-      activeLineIndex = Math.floor((currentTime / audioRef.current.duration) * filteredLines.length);
+      activeLineIndex = Math.floor(
+        (currentTime / audioRef.current.duration) * filteredLines.length
+      );
     }
     return filteredLines.map((line, index) => {
       const trimmed = line.trim();
@@ -179,6 +155,20 @@ const ConversationsTab = () => {
         message = trimmed.substring(6).trim();
       } else if (trimmed.toLowerCase().startsWith('bot:')) {
         message = trimmed.substring(4).trim();
+      }
+      // Highlight search keyword if provided.
+      if (transcriptSearchTerm) {
+        const regex = new RegExp(`(${transcriptSearchTerm})`, 'gi');
+        // Split the message by the keyword and intersperse highlight spans.
+        message = message.split(regex).map((part, i) =>
+          regex.test(part) ? (
+            <span key={i} className="highlight">
+              {part}
+            </span>
+          ) : (
+            part
+          )
+        );
       }
       return (
         <div
@@ -202,6 +192,27 @@ const ConversationsTab = () => {
         </div>
       );
     });
+  };
+
+  // Show a loading state if calls data is not yet available.
+  if (!calls) {
+    return (
+      <div className="conversations-tab">
+        <Sidebar />
+        <div className="conversations-main">
+          <p>Loading conversations...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Handle call selection; toggle selection.
+  const handleCallSelection = call => {
+    if (selectedCall && selectedCall.call_id === call.call_id) {
+      setSelectedCall(null);
+    } else {
+      setSelectedCall(call);
+    }
   };
 
   return (
@@ -240,7 +251,7 @@ const ConversationsTab = () => {
                   type="text"
                   placeholder="Search for Keywords."
                   value={transcriptSearchTerm}
-                  onChange={(e) => setTranscriptSearchTerm(e.target.value)}
+                  onChange={e => setTranscriptSearchTerm(e.target.value)}
                 />
               </div>
               <div className="transcript-content">{renderTranscript()}</div>
@@ -267,7 +278,7 @@ const ConversationsTab = () => {
                   type="text"
                   placeholder="Search for Caller Id."
                   value={callsSearchTerm}
-                  onChange={(e) => setCallsSearchTerm(e.target.value)}
+                  onChange={e => setCallsSearchTerm(e.target.value)}
                 />
               </div>
               <button
@@ -286,10 +297,18 @@ const ConversationsTab = () => {
               </button>
               {showSortFilter && (
                 <div className="sort-dropdown">
-                  <button onClick={() => handleSortFilterChange('30')}>Last 30 Days</button>
-                  <button onClick={() => handleSortFilterChange('90')}>Last 90 Days</button>
-                  <button onClick={() => handleSortFilterChange('lastMonth')}>Last Month</button>
-                  <button onClick={() => handleSortFilterChange('')}>Clear</button>
+                  <button onClick={() => handleSortFilterChange('30')}>
+                    Last 30 Days
+                  </button>
+                  <button onClick={() => handleSortFilterChange('90')}>
+                    Last 90 Days
+                  </button>
+                  <button onClick={() => handleSortFilterChange('lastMonth')}>
+                    Last Month
+                  </button>
+                  <button onClick={() => handleSortFilterChange('')}>
+                    Clear
+                  </button>
                 </div>
               )}
             </div>
@@ -300,7 +319,7 @@ const ConversationsTab = () => {
                   <input
                     type="date"
                     value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
+                    onChange={e => setStartDate(e.target.value)}
                   />
                 </div>
                 <div className="date-input">
@@ -308,7 +327,7 @@ const ConversationsTab = () => {
                   <input
                     type="date"
                     value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
+                    onChange={e => setEndDate(e.target.value)}
                   />
                 </div>
                 <button
@@ -326,8 +345,12 @@ const ConversationsTab = () => {
               filteredCalls.map(call => (
                 <div
                   key={call.call_id}
-                  className={`call-card ${selectedCall && selectedCall.call_id === call.call_id ? 'active' : ''}`}
-                  onClick={() => setSelectedCall(call)}
+                  className={`call-card ${
+                    selectedCall && selectedCall.call_id === call.call_id
+                      ? 'active'
+                      : ''
+                  }`}
+                  onClick={() => handleCallSelection(call)}
                 >
                   <div className="audio-btn">
                     {selectedCall && selectedCall.call_id === call.call_id ? (
@@ -345,7 +368,8 @@ const ConversationsTab = () => {
                     </div>
                     <div className="call-summary">
                       {call.transcript
-                        ? call.transcript.substring(0, 50) + (call.transcript.length > 50 ? '...' : '')
+                        ? call.transcript.substring(0, 50) +
+                          (call.transcript.length > 50 ? '...' : '')
                         : 'No transcript available.'}
                     </div>
                   </div>
@@ -357,8 +381,8 @@ const ConversationsTab = () => {
             ) : (
               <p style={{ textAlign: 'center', padding: '20px' }}>
                 {adminModelId
-                  ? "No conversations found for your model ID."
-                  : "No model ID set for this admin."}
+                  ? 'No conversations found for your model ID.'
+                  : 'No model ID set for this admin.'}
               </p>
             )}
           </div>

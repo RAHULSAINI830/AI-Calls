@@ -1,3 +1,4 @@
+// src/components/CalendarTab.js
 import React, { useState, useEffect } from 'react';
 import { Calendar as BigCalendar, Views, momentLocalizer } from 'react-big-calendar';
 import moment from 'moment';
@@ -9,16 +10,23 @@ import {
   FaRegCalendarAlt, 
   FaThLarge, 
   FaCalendarDay,
-  FaListAlt,
-  FaListUl
+  FaListUl,
+  FaPlus,
+  FaTimes,
+  FaMapMarkerAlt,
+  FaLink
 } from 'react-icons/fa';
 import { gapi } from 'gapi-script';
 import axios from 'axios';
 import './CalendarTab.css';
 
+// Import React-Leaflet components
+import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+
 const localizer = momentLocalizer(moment);
 
-const CustomToolbar = (toolbar) => {
+// Custom Toolbar with Add Appointment button
+const CustomToolbar = ({ onAddAppointment, ...toolbar }) => {
   const goToBack = () => toolbar.onNavigate('PREV');
   const goToNext = () => toolbar.onNavigate('NEXT');
   const goToToday = () => toolbar.onNavigate('TODAY');
@@ -60,30 +68,139 @@ const CustomToolbar = (toolbar) => {
         >
           <FaCalendarDay />
         </button>
+        {/* Replace Agenda view with Add Appointment button */}
         <button
-          onClick={() => handleViewChange(Views.AGENDA)}
-          className={`toolbar-button view-button ${toolbar.view === Views.AGENDA ? 'active' : ''}`}
-          title="Agenda View"
+          onClick={onAddAppointment}
+          className="toolbar-button add-appointment-btn"
+          title="Add Appointment"
         >
-          <FaListAlt />
+          <FaPlus />
         </button>
       </div>
     </div>
   );
 };
 
+// Location Picker Modal with interactive map and address auto-fill using Nominatim
+const LocationPickerModal = ({ onSelect, onClose }) => {
+  const defaultPosition = [51.505, -0.09]; // Default center; adjust as needed.
+  const [address, setAddress] = useState('');
+  const [selectedPosition, setSelectedPosition] = useState(null);
+
+  // Map component that listens for clicks and uses Nominatim for reverse geocoding
+  const MapWithPicker = () => {
+    useMapEvents({
+      click(e) {
+        setSelectedPosition(e.latlng);
+        // Call Nominatim reverse geocoding API
+        fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${e.latlng.lat}&lon=${e.latlng.lng}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data && data.display_name) {
+              setAddress(data.display_name);
+            } else {
+              // Fallback to coordinates if reverse geocoding fails
+              setAddress(`${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`);
+            }
+          })
+          .catch(err => {
+            console.error('Reverse geocoding error:', err);
+            setAddress(`${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`);
+          });
+      },
+    });
+    return selectedPosition ? <Marker position={selectedPosition} /> : null;
+  };
+
+  return (
+    <div className="modal location-picker-modal">
+      <div className="modal-container">
+        <div className="modal-header" style={{ background: 'linear-gradient(90deg, #ff7e5f, #feb47b)' }}>
+          <h3>Pick a Location</h3>
+          <button className="modal-close-btn" onClick={onClose}>
+            <FaTimes />
+          </button>
+        </div>
+        <div className="modal-body">
+          <div className="map-container" style={{ height: '400px', width: '100%' }}>
+            <MapContainer center={defaultPosition} zoom={13} style={{ height: '100%', width: '100%' }}>
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+              <MapWithPicker />
+            </MapContainer>
+          </div>
+          <div className="address-input-group" style={{ marginTop: '15px' }}>
+            <label htmlFor="address">Address</label>
+            <input 
+              type="text" 
+              id="address" 
+              value={address} 
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="Selected address"
+              style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px' }}
+            />
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button className="btn primary-btn" onClick={() => { onSelect(address); onClose(); }}>Select Location</button>
+          <button className="btn secondary-btn" onClick={onClose}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const CalendarTab = () => {
-  const [date, setDate] = useState(new Date());
-  const [view, setView] = useState(Views.MONTH);
-  const [googleEvents, setGoogleEvents] = useState([]);
+  // Persist date and view using sessionStorage.
+  const [date, setDate] = useState(() => {
+    const storedDate = sessionStorage.getItem('calendarDate');
+    return storedDate ? new Date(storedDate) : new Date();
+  });
+  const [view, setView] = useState(() => {
+    const storedView = sessionStorage.getItem('calendarView');
+    return storedView ? storedView : Views.MONTH;
+  });
+  
+  // Persist Google Calendar events.
+  const [googleEvents, setGoogleEvents] = useState(() => {
+    const storedEvents = sessionStorage.getItem('googleEvents');
+    return storedEvents ? JSON.parse(storedEvents) : [];
+  });
+  
   const [isGoogleConnected, setIsGoogleConnected] = useState(false);
   const [config, setConfig] = useState(null);
   const [configLoaded, setConfigLoaded] = useState(false);
 
+  // State for the Add Appointment modal.
+  const [showAppointmentForm, setShowAppointmentForm] = useState(false);
+  const [appointmentForm, setAppointmentForm] = useState({
+    title: '',
+    start: '',
+    end: '',
+    description: '',
+    invitees: '',
+    location: '',
+    meetingLink: ''
+  });
+
+  // State for the Location Picker modal.
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
+  
   // Placeholder for internal events.
   const internalEvents = [];
 
-  // Transform Google Calendar events into BigCalendar events.
+  // Save date and view changes.
+  useEffect(() => {
+    sessionStorage.setItem('calendarDate', date.toISOString());
+  }, [date]);
+
+  useEffect(() => {
+    sessionStorage.setItem('calendarView', view);
+  }, [view]);
+
+  // Transform Google Calendar events.
   const transformGoogleEvents = (events) => {
     return events.map(e => {
       const start = e.start.dateTime ? new Date(e.start.dateTime) : new Date(e.start.date);
@@ -103,7 +220,7 @@ const CalendarTab = () => {
     });
   };
 
-  // Merge events.
+  // Merge internal and Google events.
   const combinedEvents = [
     ...internalEvents,
     ...(Array.isArray(googleEvents) ? transformGoogleEvents(googleEvents) : [])
@@ -139,7 +256,7 @@ const CalendarTab = () => {
           if (signedIn) {
             loadGoogleCalendarEvents();
           }
-          if(authInstance) {
+          if (authInstance) {
             authInstance.isSignedIn.listen((isSignedIn) => {
               setIsGoogleConnected(isSignedIn);
               if (isSignedIn) {
@@ -207,9 +324,62 @@ const CalendarTab = () => {
     .then((response) => {
       const events = response.result.items;
       setGoogleEvents(events);
+      sessionStorage.setItem('googleEvents', JSON.stringify(events));
     })
     .catch((error) => {
       console.error('Error loading Google Calendar events:', error);
+    });
+  };
+
+  // Handle appointment form changes.
+  const handleAppointmentFormChange = (e) => {
+    setAppointmentForm({ ...appointmentForm, [e.target.name]: e.target.value });
+  };
+
+  // Handle adding a new appointment.
+  const handleAddAppointment = (e) => {
+    e.preventDefault();
+    if (!isGoogleConnected) {
+      alert('Please sign in to Google Calendar first.');
+      return;
+    }
+    const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    let attendees = [];
+    if (appointmentForm.invitees) {
+      attendees = appointmentForm.invitees
+        .split(',')
+        .map(email => ({ email: email.trim() }))
+        .filter(att => att.email);
+    }
+    const event = {
+      summary: appointmentForm.title,
+      description: appointmentForm.description + 
+        (appointmentForm.meetingLink ? `\nMeeting Link: ${appointmentForm.meetingLink}` : ''),
+      location: appointmentForm.location || undefined,
+      start: {
+        dateTime: new Date(appointmentForm.start).toISOString(),
+        timeZone: userTimeZone,
+      },
+      end: {
+        dateTime: new Date(appointmentForm.end).toISOString(),
+        timeZone: userTimeZone,
+      },
+      ...(attendees.length > 0 && { attendees }),
+    };
+    // Insert event with notifications.
+    gapi.client.calendar.events.insert({
+      calendarId: 'primary',
+      resource: event,
+      sendUpdates: 'all'
+    })
+    .then((response) => {
+      console.log('Event created:', response);
+      setShowAppointmentForm(false);
+      setAppointmentForm({ title: '', start: '', end: '', description: '', invitees: '', location: '', meetingLink: '' });
+      loadGoogleCalendarEvents();
+    })
+    .catch((error) => {
+      console.error('Error creating event:', error);
     });
   };
 
@@ -218,10 +388,6 @@ const CalendarTab = () => {
       <Sidebar />
       <div className="calendar-main-content">
         <div className="calendar-section">
-          <header className="calendar-header">
-            <h1>Appointment Calendar</h1>
-            <p>View your appointments and sync with your own Google Calendar.</p>
-          </header>
           <BigCalendar
             localizer={localizer}
             events={combinedEvents}
@@ -231,8 +397,8 @@ const CalendarTab = () => {
             view={view}
             onNavigate={(newDate) => setDate(newDate)}
             onView={(newView) => setView(newView)}
-            views={{ month: true, week: true, day: true, agenda: true }}
-            components={{ toolbar: CustomToolbar }}
+            views={{ month: true, week: true, day: true }}
+            components={{ toolbar: (props) => <CustomToolbar {...props} onAddAppointment={() => setShowAppointmentForm(true)} /> }}
             style={{ height: '100%' }}
           />
         </div>
@@ -255,7 +421,6 @@ const CalendarTab = () => {
               <p>No upcoming events.</p>
             )
           ) : (
-            // Disable the sign-in button until config is loaded.
             <button 
               onClick={handleGoogleSignIn} 
               className="google-signin-button"
@@ -266,6 +431,117 @@ const CalendarTab = () => {
           )}
         </div>
       </div>
+      {/* Appointment Modal */}
+      {showAppointmentForm && (
+        <div className="modal">
+          <div className="modal-container">
+            <div className="modal-header" style={{ background: 'linear-gradient(90deg, #ff7e5f, #feb47b)' }}>
+              <h3>Add New Appointment</h3>
+              <button className="modal-close-btn" onClick={() => setShowAppointmentForm(false)}>
+                <FaTimes />
+              </button>
+            </div>
+            <div className="modal-body">
+              <form onSubmit={handleAddAppointment}>
+                <div className="form-group">
+                  <label>
+                    Title <FaPlus style={{ marginLeft: '5px', color: '#ff7e5f' }} />
+                  </label>
+                  <input
+                    type="text"
+                    name="title"
+                    value={appointmentForm.title}
+                    onChange={handleAppointmentFormChange}
+                    placeholder="Event title"
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Start</label>
+                  <input
+                    type="datetime-local"
+                    name="start"
+                    value={appointmentForm.start}
+                    onChange={handleAppointmentFormChange}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>End</label>
+                  <input
+                    type="datetime-local"
+                    name="end"
+                    value={appointmentForm.end}
+                    onChange={handleAppointmentFormChange}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Description</label>
+                  <textarea
+                    name="description"
+                    value={appointmentForm.description}
+                    onChange={handleAppointmentFormChange}
+                    placeholder="Add a description..."
+                  ></textarea>
+                </div>
+                <div className="form-group">
+                  <label>
+                    Location <FaMapMarkerAlt style={{ marginLeft: '5px', color: '#feb47b' }} />
+                  </label>
+                  <div className="location-input-group">
+                    <input
+                      type="text"
+                      name="location"
+                      value={appointmentForm.location}
+                      onChange={handleAppointmentFormChange}
+                      placeholder="Event location"
+                    />
+                    <button type="button" className="pick-location-btn" onClick={() => setShowLocationPicker(true)}>
+                      Pick from Map
+                    </button>
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label>
+                    Meeting Link <FaLink style={{ marginLeft: '5px', color: '#feb47b' }} />
+                  </label>
+                  <input
+                    type="text"
+                    name="meetingLink"
+                    value={appointmentForm.meetingLink}
+                    onChange={handleAppointmentFormChange}
+                    placeholder="e.g., https://meet.google.com/..."
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Invite Emails (comma separated)</label>
+                  <input
+                    type="text"
+                    name="invitees"
+                    value={appointmentForm.invitees}
+                    onChange={handleAppointmentFormChange}
+                    placeholder="example@mail.com, another@mail.com"
+                  />
+                </div>
+                <div className="modal-footer">
+                  <button type="submit" className="btn primary-btn">Add Appointment</button>
+                  <button type="button" className="btn secondary-btn" onClick={() => setShowAppointmentForm(false)}>Cancel</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Location Picker Modal */}
+      {showLocationPicker && (
+        <LocationPickerModal 
+          onSelect={(loc) => {
+            setAppointmentForm({ ...appointmentForm, location: loc });
+          }}
+          onClose={() => setShowLocationPicker(false)}
+        />
+      )}
     </div>
   );
 };
