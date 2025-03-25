@@ -33,7 +33,6 @@ const ConversationsTab = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [showSortFilter, setShowSortFilter] = useState(false);
-
   const audioRef = useRef(null);
   const [currentTime, setCurrentTime] = useState(0);
 
@@ -68,8 +67,8 @@ const ConversationsTab = () => {
           url: `https://api.synthflow.ai/v2/calls?model_id=${adminModelId}`,
           headers: {
             accept: 'text/plain',
-            Authorization: 'Bearer 1741798049693x839210709547221000',
-          },
+            Authorization: 'Bearer 1741798049693x839210709547221000'
+          }
         };
         const response = await axios.request(options);
         console.log("API Calls:", response.data);
@@ -156,16 +155,20 @@ const ConversationsTab = () => {
     setShowDateFilter(!showDateFilter);
   };
 
-  // Render transcript with active line highlighting.
+  // Render transcript with active line highlighting and transcript search filtering.
   const renderTranscript = () => {
     if (!selectedCall) return null;
     const transcript = selectedCall.transcript || '';
     const lines = transcript.split('\n').filter(line => line.trim() !== '');
+    // Filter lines based on transcriptSearchTerm.
+    const filteredLines = transcriptSearchTerm 
+      ? lines.filter(line => line.toLowerCase().includes(transcriptSearchTerm.toLowerCase()))
+      : lines;
     let activeLineIndex = -1;
-    if (audioRef.current && audioRef.current.duration && lines.length > 0) {
-      activeLineIndex = Math.floor((currentTime / audioRef.current.duration) * lines.length);
+    if (audioRef.current && audioRef.current.duration && filteredLines.length > 0) {
+      activeLineIndex = Math.floor((currentTime / audioRef.current.duration) * filteredLines.length);
     }
-    return lines.map((line, index) => {
+    return filteredLines.map((line, index) => {
       const trimmed = line.trim();
       let speaker = 'bot';
       if (trimmed.toLowerCase().startsWith('human:')) {
