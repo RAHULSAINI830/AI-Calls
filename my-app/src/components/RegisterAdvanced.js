@@ -38,7 +38,7 @@ const RegisterAdvanced = ({ goBackToLogin }) => {
   const handleOTPVerification = async e => {
     e.preventDefault();
     try {
-      const res = await axios.post('http://localhost:5001/api/auth/verify-registration', {
+      const res = await axios.post('/api/auth/verify-registration', {
         email: formData.email,
         otp: otp,
       });

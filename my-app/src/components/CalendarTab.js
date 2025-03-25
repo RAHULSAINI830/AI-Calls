@@ -111,7 +111,7 @@ const CalendarTab = () => {
 
   // 1. Fetch configuration from the backend.
   useEffect(() => {
-    axios.get('http://localhost:5001/api/google/config')
+    axios.get('/api/google/config')
       .then((response) => {
         setConfig(response.data);
         setConfigLoaded(true);
@@ -174,7 +174,7 @@ const CalendarTab = () => {
         const googleAccessToken = authResponse.access_token;
         const googleTokenExpiry = new Date(Date.now() + authResponse.expires_in * 1000);
         const googleRefreshToken = "";
-        axios.post('http://localhost:5001/api/google/update', {
+        axios.post('/api/google/update', {
           googleAccessToken,
           googleRefreshToken,
           googleTokenExpiry,

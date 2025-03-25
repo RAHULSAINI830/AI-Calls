@@ -18,7 +18,7 @@ const Dashboard = () => {
     const token = localStorage.getItem('token');
     if (!token) return;
     axios
-      .get('http://localhost:5001/api/auth/profile', {
+      .get('/api/auth/profile', {
         headers: { Authorization: `Bearer ${token}` },
       })
       .then(response => setProfile(response.data))
